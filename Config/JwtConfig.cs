@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace AuthLawan.Config
 {
@@ -10,5 +6,7 @@ namespace AuthLawan.Config
         public required string Secret { get; set; }
         public required string ValidAudience { get; set; }
         public required string ValidIssuer { get; set; }
+
+        public TimeSpan ExpiryTimeFrame { get; set; }
     }
 }
