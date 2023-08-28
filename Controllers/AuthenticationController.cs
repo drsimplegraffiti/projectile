@@ -215,139 +215,111 @@ namespace AuthLawan.Controllers
         }
 
         [HttpPost("refresh-token")]
-        public async Task<IActionResult> RefreshToken([FromBody] TokenRequest tokenRequest)
+public async Task<IActionResult> RefreshToken([FromBody] TokenRequest tokenRequest)
+{
+    if (ModelState.IsValid)
+    {
+        var result = await VerifyAndGenerateToken(tokenRequest);
+        if (result == null)
         {
-            if (ModelState.IsValid)
-            {
-                var result = VerifyAndGenerateToken(tokenRequest);
-                if (result == null)
-                {
-                    return BadRequest(new AuthResult
-                    {
-                        Errors = new List<string>(){
-                    "Invalid token"
-                },
-                        Result = false
-                    });
-                }
-
-                return Ok(new AuthResult
-                {
-                    Result = true,
-                    Token = result.Result.Token,
-                    RefreshToken = result.Result.RefreshToken
-                });
-
-            }
-
             return BadRequest(new AuthResult
             {
                 Errors = new List<string>(){
-                    "Invalid payload"
+                    "Invalid token"
                 },
                 Result = false
             });
         }
 
-        private async Task<AuthResult> VerifyAndGenerateToken(TokenRequest tokenRequest)
+        return Ok(result);
+    }
+
+    return BadRequest(new AuthResult
+    {
+        Errors = new List<string>(){
+            "Invalid payload"
+        },
+        Result = false
+    });
+}
+private async Task<AuthResult> VerifyAndGenerateToken(TokenRequest tokenRequest)
+{
+    var jwtTokenHandler = new JwtSecurityTokenHandler();
+    try
+    {
+        var tokenValidationParameters = _tokenValidationParameters.Clone();
+        tokenValidationParameters.ValidateLifetime = false; // Disable lifetime validation for refresh
+
+        var tokenInVerification = jwtTokenHandler.ValidateToken(tokenRequest.Token, tokenValidationParameters, out var validatedToken);
+
+        if (validatedToken is JwtSecurityToken jwtSecurityToken)
         {
-            var jwtTokenHandler = new JwtSecurityTokenHandler();
-            try
-            {
-                _tokenValidationParameters.ValidateLifetime = false; // we are disabling the lifetime validation
-                var tokenInVerification = jwtTokenHandler.ValidateToken(tokenRequest.Token, _tokenValidationParameters, out var validatedToken);
-
-                if (validatedToken is JwtSecurityToken jwtSecurityToken)
-                {
-                    var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase);
-                    if (result == false)
-                        return null;
-                }
-
-                var utcExpiryDate = long.Parse(tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
-                Console.WriteLine("utcExpiryDate: " + utcExpiryDate);
-                var expiryDate = UnixTimeStampToDateTime(utcExpiryDate);
-
-                Console.WriteLine("expiryDate: " + expiryDate);
-                if (expiryDate > DateTime.Now)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Expired token"
-                        }
-                    };
-
-                var storedRefreshToken = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Token == tokenRequest.RefreshToken);
-
-                if (storedRefreshToken == null)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Invalid token"
-                        }
-                    };
-
-                if (storedRefreshToken.IsUsed)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Token has been used"
-                        }
-                    };
-
-                if (storedRefreshToken.IsRevoked)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Token has been revoked"
-                        }
-                    };
-
-                var jti = tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
-
-                if (storedRefreshToken
-                    .JwtId != jti)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Token doesn't match"
-                        }
-                    };
-
-                if (storedRefreshToken.ExpiryDate < DateTime.UtcNow)
-                    return new AuthResult
-                    {
-                        Result = false,
-                        Errors = new List<string>(){
-                            "Token has expired, user needs to relogin"
-                        }
-                    };
-
-                storedRefreshToken.IsUsed = true;
-                _context.RefreshTokens.Update(storedRefreshToken);
-                await _context.SaveChangesAsync();
-
-                var dbUser = await _userManager.FindByIdAsync(storedRefreshToken.UserId);
-                return await GenerateJwtToken(dbUser);
-
-            }
-            catch (Exception)
-            {
-
-                return new AuthResult
-                {
-                    Result = false,
-                    Errors = new List<string>(){
-                        "Server error occured"
-                    }
-                };
-            }
+            var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase);
+            if (!result)
+                return null;
         }
+
+        var storedRefreshToken = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Token == tokenRequest.RefreshToken);
+
+        if (storedRefreshToken == null)
+            return new AuthResult
+            {
+                Result = false,
+                Errors = new List<string>(){
+                    "Invalid token"
+                }
+            };
+
+        if (storedRefreshToken.IsUsed)
+            return new AuthResult
+            {
+                Result = false,
+                Errors = new List<string>(){
+                    "Token has been used"
+                }
+            };
+
+        if (storedRefreshToken.IsRevoked)
+            return new AuthResult
+            {
+                Result = false,
+                Errors = new List<string>(){
+                    "Token has been revoked"
+                }
+            };
+
+        var jti = tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+
+        if (storedRefreshToken.JwtId != jti)
+            return new AuthResult
+            {
+                Result = false,
+                Errors = new List<string>(){
+                    "Token doesn't match"
+                }
+            };
+
+        storedRefreshToken.IsUsed = true;
+        _context.RefreshTokens.Update(storedRefreshToken);
+        await _context.SaveChangesAsync();
+
+        var dbUser = await _userManager.FindByIdAsync(storedRefreshToken.UserId);
+        return await GenerateJwtToken(dbUser);
+
+    }
+    catch (Exception)
+    {
+
+        return new AuthResult
+        {
+            Result = false,
+            Errors = new List<string>(){
+                "Server error occurred"
+            }
+        };
+    }
+}
+
 
         private DateTime UnixTimeStampToDateTime(long unixTimeStamp)
         {
