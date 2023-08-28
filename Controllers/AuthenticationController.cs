@@ -64,8 +64,9 @@ namespace AuthLawan.Controllers
                 if (isCreated.Succeeded)
                 {
                     // generate jwt token
-                    // var token = await GenerateJwtToken(new_user);
-                    return Ok("User created successfully");
+                    var token = await GenerateJwtToken(new_user);
+                    
+                    return Ok(token);
 
                 }
                 else
@@ -202,12 +203,15 @@ namespace AuthLawan.Controllers
             await _context.RefreshTokens.AddAsync(refreshToken);
             await _context.SaveChangesAsync();
 
-            return new AuthResult
+           var authResult = new AuthResult
             {
                 Result = true,
                 Token = jwtToken,
                 RefreshToken = refreshToken.Token
             };
+
+            return authResult;
+            
 
         }
 
