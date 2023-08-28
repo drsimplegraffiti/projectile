@@ -120,11 +120,11 @@ namespace AuthLawan.Controllers
 
                 if (user == null)
                 {
-                    // return NotFound(new AuthResult
-                    // {
-                    //     Errors = new List<string> { "User not found" },
-                    //     Result = false
-                    // });
+                    return NotFound(new AuthResult
+                    {
+                        Errors = new List<string> { "User not found" },
+                        Result = false
+                    });
                 }
 
                 // Return the user profile information
