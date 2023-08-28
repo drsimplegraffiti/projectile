@@ -113,7 +113,7 @@ namespace AuthLawan.Controllers
                 }
 
                 // generate jwt token
-                var token = GenerateJwtToken(existingUser);
+                var token = await GenerateJwtToken(existingUser);
                 return Ok(token);
             }
             return BadRequest(new AuthResult
@@ -181,7 +181,6 @@ namespace AuthLawan.Controllers
                         new Claim(JwtRegisteredClaimNames.Email, user.Email),
                         new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                         new Claim(JwtRegisteredClaimNames.Iat, DateTime.Now.ToUniversalTime().ToString()),
-                        // new Claim(JwtRegisteredClaimNames.Exp, DateTime.UtcNow.Add(TimeSpan.Parse(_configuration.GetSection("JwtConfig:ExpiryTimeFrame").Value)).ToString()),
                     }),
                 Expires = DateTime.UtcNow.Add(TimeSpan.Parse(_configuration.GetSection("JwtConfig:ExpiryTimeFrame").Value)),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256),
@@ -232,7 +231,13 @@ namespace AuthLawan.Controllers
                     });
                 }
 
-                return Ok(result);
+                return Ok(new AuthResult
+                {
+                    Result = true,
+                    Token = result.Result.Token,
+                    RefreshToken = result.Result.RefreshToken
+                });
+
             }
 
             return BadRequest(new AuthResult
